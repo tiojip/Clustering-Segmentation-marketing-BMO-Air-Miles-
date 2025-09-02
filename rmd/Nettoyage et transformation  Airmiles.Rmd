@@ -1,0 +1,717 @@
+---
+title: "Clustering Airmiles"
+author: "Leroy"
+date: "2025-02-25"
+output: html_document
+---
+
+```{r}
+# Charger le package data.table
+install.packages("data.table")
+library(data.table)
+```
+
+```{r}
+install.packages("fastDummies")  # Installe le package
+library(fastDummies)
+```
+
+```{r}
+# Installer le package dplyr (à faire une seule fois)
+install.packages("dplyr")
+
+# Charger le package
+library(dplyr)
+```
+
+```{r}
+df_members_filtered_1 <- fread("df_members_filtered_1.csv")
+```
+
+```{r}
+df_reward_filtered_1 <- fread("df_reward_filtered_1.csv")
+```
+
+```{r}
+df_transaction_filtered_1 <- fread("df_transaction_filtered_1.csv")
+```
+
+```{r}
+df_final_filtered <- fread("df_final_filtered.csv")
+```
+
+```{r}
+# Effectuer une jointure interne (INNER JOIN)
+df_merged_f <- df_final_filtered %>%
+  inner_join(df_members_filtered_1, by = "MEMBER_ID")
+```
+
+```{r}
+# Effectuer une jointure interne (INNER JOIN)
+df_merged_f <- df_merged_f %>%
+  inner_join(df_transaction_filtered_1, by = "MEMBER_ID")
+```
+
+```{r}
+# Effectuer une jointure interne (INNER JOIN)
+df_merged_f <- df_merged_f %>%
+  inner_join(df_reward_filtered_1, by = "MEMBER_ID")
+```
+
+```{r}
+head(df_merged_f)
+```
+
+```{r}
+# Exporter le dataframe en fichier CSV
+write.csv(df_merged_f, "df_merged_f1.csv", row.names = FALSE)
+```
+
+
+
+```{r}
+colnames(df_merged_f)
+```
+```{r}
+library(dplyr)
+
+# Création du vecteur de correspondance
+category_mapping <- c(
+  "CATEGORY_1" = "Alcool",
+  "CATEGORY_2" = "Épicerie",
+  "CATEGORY_3" = "Essence",
+  "CATEGORY_4" = "CarteCrédit",
+  "CATEGORY_5" = "Quincaillerie",
+  "CATEGORY_6" = "Pharmacie",
+  "CATEGORY_7" = "Automobile",
+  "CATEGORY_8" = "AutresCatégories"
+)
+
+# Remplacement des valeurs dans df_merged_
+df_merged_f <- df_merged_f %>%
+  mutate(RETAILER = recode(RETAILER, !!!category_mapping))
+
+# Vérification des premières lignes
+head(df_merged_f)
+
+```
+```{r}
+summary(df_merged_f)
+```
+```{r}
+# Calculer l'âge moyen par segment
+df_merged_f %>%
+  group_by(Cluster) %>%
+  summarise(Age_Moyen = mean(AGE, na.rm = TRUE))
+
+```
+
+```{r}
+chisq.test(table(df_merged_f$Cluster, df_merged_f$GENDER))
+
+```
+```{r}
+chisq.test(table(df_merged_f$Cluster, df_merged_f$LANGUAGE))
+
+```
+```{r}
+chisq.test(table(df_merged_f$Cluster, df_merged_f$PROV))
+
+```
+```{r}
+chisq.test(table(df_merged_f$Cluster, df_merged_f$MAILABLE_FLAG))
+
+```
+```{r}
+chisq.test(table(df_merged_f$Cluster, df_merged_f$EMAILABLE_FLAG))
+
+```
+```{r}
+chisq.test(table(df_merged_f$Cluster, df_merged_f$SMALL_BUSINESS_FLAG))
+
+```
+
+
+
+```{r}
+MEMBERS_DIM <- fread("MEMBERS_DIM.csv")
+```
+
+```{r}
+REWARD_FACT <- fread("REWARD_FACT.csv")
+```
+
+```{r}
+TRANSACTION_FACT <- fread("TRANSACTION_FACT.csv")
+```
+```{r}
+# Filtrer les enregistrements où RETAILER est "Essence"
+transactions_essence <- subset(TRANSACTION_FACT, RETAILER == "CATEGORY_3")
+```
+
+```{r}
+# Afficher les premières lignes du résultat
+head(transactions_essence)
+```
+
+
+```{r}
+# Vérifier le nombre de valeurs manquantes par colonne
+missing_values <- colSums(is.na(transactions_essence))
+
+# Afficher les résultats
+cat("Nombre de valeurs manquantes par colonne dans TRANSACTION_FACT:\n")
+print(missing_values)
+
+# Calculer le pourcentage de valeurs manquantes par colonne
+missing_percentage <- (colSums(is.na(transactions_essence)) / nrow(transactions_essence)) * 100
+
+# Afficher les pourcentages
+cat("\nPourcentage de valeurs manquantes par colonne :\n")
+print(missing_percentage)
+
+```
+
+```{r}
+# Imputation des valeurs manquantes par la médiane du RETAILER "Essence"
+transactions_essence <- transactions_essence %>%
+  mutate(REWARD_POINTS_EARNED = ifelse(is.na(REWARD_POINTS_EARNED), 
+                                       median(REWARD_POINTS_EARNED, na.rm = TRUE), 
+                                       REWARD_POINTS_EARNED))
+
+```
+
+```{r}
+# Imputation des valeurs manquantes par la médiane du RETAILER "Essence"
+transactions_essence <- transactions_essence %>%
+  mutate(CASH_BACK_POINTS_EARNED = ifelse(is.na(CASH_BACK_POINTS_EARNED), 
+                                       median(CASH_BACK_POINTS_EARNED, na.rm = TRUE), 
+                                       CASH_BACK_POINTS_EARNED))
+```
+
+
+```{r}
+# Remplacer les NA dans la colonne RETAILER par "No Retailer"
+TRANSACTION_FACT$RETAILER[is.na(TRANSACTION_FACT$RETAILER)] <- "No Retailer"
+
+```
+
+```{r}
+
+# Imputation des valeurs manquantes par la médiane du RETAILER correspondant
+TRANSACTION_FACT <- TRANSACTION_FACT %>%
+  group_by(RETAILER) %>%
+  mutate(REWARD_POINTS_EARNED = ifelse(is.na(REWARD_POINTS_EARNED), 
+                                       median(REWARD_POINTS_EARNED, na.rm = TRUE), 
+                                       REWARD_POINTS_EARNED)) %>%
+  ungroup()
+
+```
+
+```{r}
+
+# Imputation des valeurs manquantes par la médiane du RETAILER correspondant
+TRANSACTION_FACT <- TRANSACTION_FACT %>%
+  group_by(RETAILER) %>%
+  mutate(CASH_BACK_POINTS_EARNED = ifelse(is.na(CASH_BACK_POINTS_EARNED), 
+                                          median(CASH_BACK_POINTS_EARNED, na.rm = TRUE), 
+                                          CASH_BACK_POINTS_EARNED)) %>%
+  ungroup()
+
+```
+
+```{r}
+# Sélectionner uniquement les colonnes nécessaires
+df_transaction_extracted <- TRANSACTION_FACT %>%
+  select(MEMBER_ID, 
+         MONTH_ID,
+         RETAILER, 
+         TRANSACTIONS, 
+         AMOUNT_SPENT, 
+         BASE_POINTS_EARNED, 
+         BONUS_POINTS_EARNED, 
+         REWARD_POINTS_EARNED, 
+         CASH_BACK_POINTS_EARNED)
+
+# Afficher un aperçu des données extraites
+cat("DataFrame avec uniquement les colonnes nécessaires pour l'analyse :\n")
+head(df_transaction_extracted)
+
+```
+
+```{r}
+# Compter le nombre de valeurs manquantes par colonne
+missing_values <- colSums(is.na(df_transaction_extracted))
+
+# Afficher les résultats
+cat("Nombre de valeurs manquantes par colonne dans df_reward_extracted :\n")
+print(missing_values)
+
+```
+
+
+```{r}
+# Sélectionner uniquement les colonnes nécessaires
+df_members_extracted <- MEMBERS_DIM %>%
+  select(MEMBER_ID,TENURE_MONTHS, CASH_BACK_POINTS_BALANCE, REWARD_POINTS_BALANCE)
+
+# Afficher un aperçu des données extraites
+cat("DataFrame avec uniquement les colonnes nécessaires pour l'analyse :\n")
+head(df_members_extracted)
+
+```
+
+```{r}
+# Compter le nombre de valeurs manquantes par colonne
+missing_values <- colSums(is.na(df_members_extracted))
+
+# Afficher les résultats
+cat("Nombre de valeurs manquantes par colonne dans df_reward_extracted :\n")
+print(missing_values)
+
+```
+
+
+```{r}
+# Sélectionner uniquement les colonnes nécessaires
+df_reward_extracted <- REWARD_FACT %>%
+  select(MEMBER_ID,MONTH_ID, REWARDS_CATEGORY, REDEMPTIONS, NUMBER_ITEMS_REDEEMED, POINTS_REDEEMED)
+
+# Afficher un aperçu des données extraites
+cat("DataFrame avec uniquement les colonnes nécessaires pour l'analyse :\n")
+head(df_reward_extracted)
+
+```
+
+```{r}
+# Compter le nombre de valeurs manquantes par colonne
+missing_values <- colSums(is.na(df_reward_extracted))
+
+# Afficher les résultats
+cat("Nombre de valeurs manquantes par colonne dans df_reward_extracted :\n")
+print(missing_values)
+
+```
+
+
+
+```{r}
+summary(TRANSACTION_FACT)
+```
+
+
+```{r}
+head(TRANSACTION_FACT)
+```
+
+
+
+ 
+ Faire la Jointure avec TRANSACTION_FACT et Conserver MONTH_ID
+```{r}
+# Faire une jointure entre TRANSACTION_FACT et MEMBERS_DIM via MEMBER_ID
+dt_merged_1 <- df_transaction_extracted %>%
+  inner_join(df_members_extracted, by = "MEMBER_ID")
+
+```
+ 
+```{r}
+dt_merged_2 <- dt_merged_1 %>%
+  inner_join(df_reward_extracted, by = "MEMBER_ID")
+
+```
+
+
+```{r}
+summary(dt_merged_2)
+```
+ 
+ Plan Optimal pour l’Analyse - Filtrer les données après la période COVID-19 (MONTH_ID >= 202301).
+✅ 1. Filtrer les Données Pertinentes après COVID-19
+ et post-COVID 📌 Exclure les périodes COVID-19 et post-COVID où les comportements étaient anormaux. MEMBERS_DIM
+ 
+ Échantillonner Après la Jointure -  Échantillonner 20% après la jointure (en conservant MONTH_ID) 
+
+```{r}
+# Définir la période après laquelle les données sont pertinentes
+valid_period_start <- 202301  # Janvier 2023
+
+# Filtrer dt_merged_2 pour ne garder que les transactions où BOTH MONTH_ID.x et MONTH_ID.y respectent le critère
+dt_filtered_merged_1 <- dt_merged_2 %>%
+  filter(MONTH_ID.x >= valid_period_start & MONTH_ID.y >= valid_period_start)
+
+```
+
+
+```{r}
+set.seed(123)  # Garantir la reproductibilité des résultats
+dt_sample_merged <- dt_filtered_merged_1 %>%
+  sample_frac(0.20)  # Prendre un échantillon de 20%
+```
+
+```{r}
+# Supprimer les colonnes MONTH_ID.x et MONTH_ID.y
+dt_sample_merged_1 <- dt_sample_merged %>%
+  select(-MONTH_ID.x, -MONTH_ID.y)
+
+
+```
+
+```{r}
+# Vérifier les colonnes restantes
+colnames(dt_sample_merged_1)
+```
+ 
+```{r}
+summary(dt_sample_merged_1)
+```
+ 
+ 
+```{r}
+# Agrégation par MEMBER_ID en fonction des types de variables
+dt_sample_aggregated <- dt_sample_merged_1 %>%
+  group_by(MEMBER_ID) %>%
+  summarise(
+    # Variables transactionnelles : Somme totale
+    TOTAL_TRANSACTIONS = sum(TRANSACTIONS, na.rm = TRUE),
+    TOTAL_AMOUNT_SPENT = sum(AMOUNT_SPENT, na.rm = TRUE),
+    TOTAL_BASE_POINTS_EARNED = sum(BASE_POINTS_EARNED, na.rm = TRUE),
+    TOTAL_BONUS_POINTS_EARNED = sum(BONUS_POINTS_EARNED, na.rm = TRUE),
+    TOTAL_REWARD_POINTS_EARNED = sum(REWARD_POINTS_EARNED, na.rm = TRUE),
+    TOTAL_CASH_BACK_POINTS_EARNED = sum(CASH_BACK_POINTS_EARNED, na.rm = TRUE),
+    
+    # Variables de rédemption : Somme
+    TOTAL_REDEMPTIONS = sum(REDEMPTIONS, na.rm = TRUE),
+    TOTAL_ITEMS_REDEEMED = sum(NUMBER_ITEMS_REDEEMED, na.rm = TRUE),
+    TOTAL_POINTS_REDEEMED = sum(POINTS_REDEEMED, na.rm = TRUE),
+    
+    # Variables de balance : Dernière valeur connue (on garde la plus récente)
+    CASH_BACK_POINTS_BALANCE = last(CASH_BACK_POINTS_BALANCE[!is.na(CASH_BACK_POINTS_BALANCE)]),
+    REWARD_POINTS_BALANCE = last(REWARD_POINTS_BALANCE[!is.na(REWARD_POINTS_BALANCE)]),
+
+    # Ancienneté : On garde la valeur unique (car elle ne change pas)
+    TENURE_MONTHS = first(TENURE_MONTHS),
+
+    # Nombre de détaillants uniques
+    UNIQUE_RETAILERS = n_distinct(RETAILER, na.rm = TRUE),
+
+    # Catégorie de détaillant la plus fréquente
+    TOP_RETAILER_CATEGORY = names(which.max(table(RETAILER)))[1],
+
+    # Nombre de catégories de récompenses utilisées
+    UNIQUE_REWARD_CATEGORIES = n_distinct(REWARDS_CATEGORY, na.rm = TRUE),
+
+    # Catégorie de récompense la plus utilisée
+    TOP_REWARD_CATEGORY = names(which.max(table(REWARDS_CATEGORY)))[1],
+
+    # Ratio d'utilisation de la catégorie de récompense dominante
+    REWARD_CATEGORY_USAGE_RATIO = max(table(REWARDS_CATEGORY)) / sum(table(REWARDS_CATEGORY), na.rm = TRUE),
+
+    # Nombre de catégories de récompenses utilisées
+    UNIQUE_REWARD_CATEGORIES = n_distinct(REWARDS_CATEGORY, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Vérifier le résultat
+head(dt_sample_aggregated)
+
+```
+
+```{r}
+# Nombre total de valeurs manquantes par colonne
+missing_values <- colSums(is.na(dt_sample_aggregated))
+
+# Afficher les résultats
+cat("Nombre de valeurs manquantes par colonne dans dt_sample_aggregated :\n")
+print(missing_values)
+
+```
+
+```{r}
+colnames(dt_sample_aggregated)
+```
+
+```{r}
+
+# Création des nouvelles variables dans dt_sample_aggregated
+dt_sample_aggregated <- dt_sample_aggregated %>%
+  
+  #  Score de fidélité basé sur plusieurs critères
+  mutate(Loyalty_Score = (TOTAL_TRANSACTIONS + TOTAL_REDEMPTIONS + REWARD_POINTS_BALANCE) / (TENURE_MONTHS + 1)) %>%
+
+  #  Ratio d'utilisation des points (indique si le client utilise ses points)
+  mutate(Points_Utilization_Score = ifelse(TOTAL_BASE_POINTS_EARNED + TOTAL_BONUS_POINTS_EARNED > 0,
+                                           TOTAL_POINTS_REDEEMED / (TOTAL_BASE_POINTS_EARNED + TOTAL_BONUS_POINTS_EARNED + 1), 0)) %>%
+
+  #  Ratio d'utilisation des Cash Miles
+  mutate(Cash_Back_Usage_Ratio = ifelse(TOTAL_CASH_BACK_POINTS_EARNED > 0, 
+                                        TOTAL_CASH_BACK_POINTS_EARNED / (TOTAL_CASH_BACK_POINTS_EARNED + TOTAL_REWARD_POINTS_EARNED + 1), 0)) %>%
+
+  #  Fréquence de rédemption (nombre de rédemptions par transaction)
+  mutate(Redemption_Frequency = ifelse(TOTAL_TRANSACTIONS > 0, TOTAL_REDEMPTIONS / TOTAL_TRANSACTIONS, 0)) %>%
+
+  #  Fréquence des transactions (transactions par mois)
+  mutate(Transaction_Frequency = ifelse(TENURE_MONTHS > 0, TOTAL_TRANSACTIONS / TENURE_MONTHS, 0)) %>%
+
+  #  Dépense moyenne par transaction
+  mutate(Avg_Spending_Per_Transaction = ifelse(TOTAL_TRANSACTIONS > 0, TOTAL_AMOUNT_SPENT / TOTAL_TRANSACTIONS, 0)) %>%
+
+  #  Part du retailer préféré (nombre de transactions chez le retailer préféré / total transactions)
+  mutate(Top_Retailer_Category_Share = ifelse(TOTAL_TRANSACTIONS > 0, UNIQUE_RETAILERS / TOTAL_TRANSACTIONS, 0)) %>%
+
+  #  Part de la catégorie de récompense préférée (nombre de rédemptions pour la catégorie la plus utilisée / total rédemptions)
+  mutate(Top_Reward_Category_Share = ifelse(TOTAL_REDEMPTIONS > 0, UNIQUE_REWARD_CATEGORIES / TOTAL_REDEMPTIONS, 0))
+
+# Afficher les premières lignes avec les nouvelles variables
+head(dt_sample_aggregated)
+
+```
+
+```{r}
+# Exporter le dataframe en fichier CSV
+write.csv(dt_sample_aggregated, "dt_sample_aggregated.csv", row.names = FALSE)
+```
+
+```{r}
+dt_sample_aggregated <- fread("dt_sample_aggregated.csv")
+```
+
+```{r}
+head(dt_sample_aggregated)
+```
+
+```{r}
+# Nombre total de valeurs manquantes par colonne
+missing_values <- colSums(is.na(dt_sample_aggregated))
+
+# Afficher les résultats
+cat("Nombre de valeurs manquantes par colonne dans dt_sample_aggregated :\n")
+print(missing_values)
+```
+
+```{r}
+summary(dt_sample_aggregated)
+```
+reduire l'impact des outliers des variables numeriques excepté MEMBER_ID et les variables binaires du dataset dt_sample_aggregated 
+
+```{r}
+# Exclure MEMBER_ID et les variables binaires
+numeric_vars <- setdiff(names(dt_sample_aggregated), "MEMBER_ID")
+
+# Catégorisation des variables
+# Variables financières : Représentent des montants cumulés ou dépensés
+monetary_vars <- c("TOTAL_AMOUNT_SPENT",  # Total des dépenses d'un membre
+                   "TOTAL_BASE_POINTS_EARNED",  # Points de base gagnés
+                   "TOTAL_BONUS_POINTS_EARNED",  # Points bonus gagnés
+                   "TOTAL_REWARD_POINTS_EARNED",  # Total des points de récompense gagnés
+                   "TOTAL_CASH_BACK_POINTS_EARNED",  # Total des points cash-back gagnés
+                   "CASH_BACK_POINTS_BALANCE",  # Solde de points cash-back
+                   "REWARD_POINTS_BALANCE")  # Solde de points de récompense
+
+# Ratios et scores : Mesurent des proportions et comportements
+ratio_vars <- c("Points_Utilization_Score",  # Ratio d'utilisation des points accumulés
+                "Cash_Back_Usage_Ratio",  # Proportion d'utilisation des cash-back points
+                "Avg_Spending_Per_Transaction")  # Dépense moyenne par transaction
+
+# Variables de fréquence : Représentent des volumes d'activité
+frequency_vars <- c("TOTAL_TRANSACTIONS",  # Nombre total de transactions effectuées
+                    "TOTAL_REDEMPTIONS",  # Nombre total de rédemptions de points
+                    "TOTAL_ITEMS_REDEEMED",  # Nombre total d'articles réclamés avec des points
+                    "TOTAL_POINTS_REDEEMED",  # Total des points utilisés en rédemption
+                    "Transaction_Frequency",  # Fréquence d'achat ou d'activité
+                    "Redemption_Frequency",  # Fréquence de rédemption des points
+                    "TENURE_MONTHS",  # Ancienneté du membre dans le programme de fidélité
+                    "Loyalty_Score")  # Indicateur global de fidélité
+
+
+```
+
+
+```{r}
+# Installer DescTools si ce n'est pas déjà fait
+if (!requireNamespace("DescTools", quietly = TRUE)) {
+  install.packages("DescTools")
+}
+
+# Charger le package
+library(DescTools)
+
+```
+
+
+Log-Transformation Modifiée pour les Variables Financières
+```{r}
+dt_sample_aggregated <- dt_sample_aggregated %>%
+  mutate(across(all_of(monetary_vars), 
+                ~ ifelse(. > 0, log1p(.), 
+                         ifelse(. < 0, -log1p(abs(.) + 1), 0))))
+
+```
+
+```{r}
+# Vérifier le nombre de valeurs manquantes dans chaque colonne
+colSums(is.na(dt_sample_aggregated))
+
+```
+
+
+Winsorization sur les Ratios et Scores (Incluant les Négatifs)
+```{r}
+
+# Définition d'une fonction Winsorization manuelle
+winsorize_manual <- function(x, lower_quantile = 0.01, upper_quantile = 0.99) {
+  if (is.numeric(x)) {
+    lower <- quantile(x, lower_quantile, na.rm = TRUE)
+    upper <- quantile(x, upper_quantile, na.rm = TRUE)
+    return(pmin(pmax(x, lower), upper))  # Appliquer Winsorization sans erreur
+  } else {
+    return(x)  # Retourner la valeur inchangée si ce n'est pas numérique
+  }
+}
+
+
+```
+
+```{r}
+# Appliquer la Winsorization à toutes les variables de ratio_vars
+dt_sample_aggregated <- dt_sample_aggregated %>%
+  mutate(across(all_of(ratio_vars), winsorize_manual))
+
+```
+
+
+Standardisation Robuste sur les Fréquences et Volumes
+```{r}
+# Définition de la fonction de standardisation robuste
+robust_scale <- function(x) {
+  if (is.numeric(x)) {
+    (x - median(x, na.rm = TRUE)) / IQR(x, na.rm = TRUE)
+  } else {
+    x  # Si la variable n'est pas numérique, elle est retournée inchangée
+  }
+}
+
+# Appliquer la standardisation robuste en remplaçant directement les variables existantes
+dt_sample_aggregated <- dt_sample_aggregated %>%
+  mutate(across(all_of(frequency_vars), ~ robust_scale(.)))
+
+
+
+```
+
+
+```{r}
+summary(dt_sample_aggregated)
+```
+
+```{r}
+colnames(dt_sample_aggregated)
+```
+
+```{r}
+colSums(is.na(dt_sample_aggregated))
+
+```
+
+```{r}
+dt_sample_aggregated_no_id <- dt_sample_aggregated %>%
+  select(-MEMBER_ID)  # Exclure MEMBER_ID car c'est un identifiant
+```
+
+```{r}
+colnames(dt_sample_aggregated_no_id)
+```
+
+```{r}
+head(dt_sample_aggregated_no_id)
+```
+
+Standardisation
+
+```{r}
+# Séparer les variables numériques et catégorielles
+numeric_vars <- dt_sample_aggregated_no_id %>%
+  select(where(is.numeric)) %>%
+  colnames()
+
+categorical_vars <- dt_sample_aggregated_no_id %>%
+  select(where(is.character)) %>%
+  colnames()
+
+# Standardiser les variables numériques avec Z-score
+dt_sample_scaled <- dt_sample_aggregated_no_id %>%
+  mutate(across(all_of(numeric_vars), ~ (.- mean(., na.rm = TRUE)) / sd(., na.rm = TRUE))) %>%
+  mutate(across(all_of(categorical_vars), as.factor))  # Convertir en facteur
+```
+
+```{r}
+# Vérifier les transformations
+summary(dt_sample_scaled)
+```
+```{r}
+# Exporter le dataframe en fichier CSV
+write.csv(dt_sample_scaled, "dt_sample_scaled_final.csv", row.names = FALSE)
+```
+
+```{r}
+colnames(dt_sample_scaled)
+```
+# Vérifier la nouvelle structure du dataset
+colnames(dt_sample_numeric)
+```
+ 
+ 
+```{r}
+# Exporter le dataframe en fichier CSV
+write.csv(dt_sample_numeric, "dt_sample_numeric.csv", row.names = FALSE)
+```
+
+```{r}
+# Exporter le dataframe en fichier CSV
+write.csv(dt_sample_numeric, "dt_sample_numeric_final.csv", row.names = FALSE)
+```
+
+```{r}
+colnames(dt_sample_numeric)
+```
+
+```{r}
+dt_sample_numeric <- fread("dt_sample_numeric.csv")
+```
+
+
+```{r}
+dt_sample_numeric <- fread("dt_sample_numeric.csv")
+```
+
+```{r}
+gc()  # Exécute le garbage collector
+rm(list = ls())  # Supprime tous les objets en mémoire
+gc()  # Exécute encore le garbage collector
+
+```
+```{r}
+# Supprimer uniquement la table missing_values de la mémoire
+rm(dt_sample_numeric)
+
+# Libérer la mémoire inutilisée
+gc()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
